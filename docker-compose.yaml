@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  bot:
+    container_name: 'wellbeing_club_bot'
+    build: .
+    image: 'wellbeing_club_bot'
+    volumes:
+      - ./data:/opt/wellbeing_club_bot/data
+    env_file: '.env'
+    restart: always

@@ -2,13 +2,15 @@
 
 import logging
 import sqlite3
+from threading import Lock
 
 
 class Database:
 	"""SQLite3 database manager."""
 
-	def __init__(self):
-		self.connection = sqlite3.connect('wellbeing.db')
+	def __init__(self, db_name):
+		self.connection = sqlite3.connect(db_name, check_same_thread=False)
+		self.lock = Lock()
 		self.transact(
 			"""
 			CREATE TABLE if not exists 'users' (
@@ -38,11 +40,13 @@ class Database:
 		self.connection.close()
 
 	def transact(self, query, params=()):
-		try:
-			with self.connection as connection:
-				return connection.execute(query, params)
-		except sqlite3.DatabaseError as err:
-			logging.error('Database error! - %s', err)
+		with self.lock:
+			try:
+				with self.connection as connection:
+					return connection.execute(query, params)
+			except sqlite3.DatabaseError as err:
+				logging.error('Database error! - %s', err)
+				raise
 
 	def subscribe(self, user_id, username):
 		self.transact(
@@ -55,7 +59,7 @@ class Database:
 			""",
 			(user_id, username)
 		)
-		logging.info('New subscriber! - %s (%s).', username, user_id)
+		logging.info('New subscriber! - %s (id %s).', username, user_id)
 
 	def cancel_subscription(self, user_id):
 		self.transact(
@@ -68,6 +72,15 @@ class Database:
 			(user_id,)
 		)
 		logging.info('User %s cancelled subscription.', user_id)
+
+	def check_subscription(self, user_id):
+		user = self.transact(
+			"SELECT subscribed FROM users WHERE id = ?",
+			(user_id,)
+		).fetchone()
+		if not user or not user[0]:
+			return False
+		return True
 
 	def get_users(self):
 		return self.transact("SELECT id FROM users WHERE subscribed = 1").fetchall()
@@ -102,6 +115,8 @@ class Database:
 		assert len(subscribed) == 10, len(subscribed)
 		for i in range(5):
 			self.cancel_subscription(i)
+		assert self.check_subscription(1) is False
+		assert self.check_subscription(6) is True
 		subscribed = self.get_users()
 		assert len(subscribed) == 5, len(subscribed)
 		post_id = self.save_post("CURRENT_TIMESTAMP", "post", 'image_path')

@@ -8,6 +8,7 @@ from telegram.ext import (
 
 from bot import replies
 from bot.excel import ParseError, parse_document
+from bot.jobs import schedule_posts
 from bot.menu import back
 from bot.replies import reply
 
@@ -59,8 +60,9 @@ def get_posts(update, context):
 
 
 def new_schedule(update, context):
-	for post in context.user_data.pop('new_posts'):
-		context.bot_data['db'].save_post(*post)
+	posts = context.user_data.pop('new_posts')
+	context.bot_data['db'].save_posts(posts)
+	schedule_posts(context.job_queue, posts)
 	update.callback_query.answer(replies.answers['updated'])
 	return back(update, context)
 

@@ -15,6 +15,7 @@ from telegram.ext import (
 from bot import menu
 from bot.admin import admin_menu
 from bot.database import Database
+from bot.jobs import schedule_posts
 
 
 def main():
@@ -67,7 +68,9 @@ def main():
 	dispatcher.add_error_handler(menu.error)
 
 	updater.start_polling()
+	schedule_posts(dispatcher.job_queue, database.get_posts())
 	logging.info("Bot started!")
+
 	updater.idle()
 	logging.info("Turned off.")
 

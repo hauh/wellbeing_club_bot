@@ -24,6 +24,7 @@ info = {
 	'text': "Какая-то информация здесь",
 	'buttons': InlineKeyboardMarkup([back_btn])
 }
+group_subscribed = "Группа подписана."
 
 # admin #
 upload_btn = [InlineKeyboardButton("Загрузить файл", callback_data='upload')]

@@ -68,13 +68,16 @@ def new_schedule(update, context):
 
 
 admin_menu = ConversationHandler(
-	entry_points=[CommandHandler('admin', admin)],
+	entry_points=[CommandHandler('admin', admin, Filters.chat_type.private)],
 	states={
 		1: [
 			CallbackQueryHandler(stats, pattern=r'^stats$'),
 			CallbackQueryHandler(update_posts, pattern=r'^upload$')
 		],
-		2: [MessageHandler(Filters.document.file_extension("xlsx"), get_posts)],
+		2: [MessageHandler(
+			Filters.chat_type.private & Filters.document.file_extension("xlsx"),
+			get_posts
+		)],
 		3: [CallbackQueryHandler(new_schedule, pattern=r'^update$')]
 	},
 	fallbacks=[CallbackQueryHandler(back, pattern=r'^back$')],

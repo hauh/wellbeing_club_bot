@@ -19,12 +19,12 @@ class Database:
 		self.lock = Lock()
 		self.transact(
 			"""
-			CREATE TABLE if not exists 'users' (
+			CREATE TABLE if not exists 'chats' (
 				'id' INTEGER primary key,
-				'username' TEXT,
+				'name' TEXT,
 				'subscribed' INTEGER default 1,
 				'subscription_time' TIMESTAMP default CURRENT_TIMESTAMP,
-				'posts_seen' INTEGER default 0,
+				'posts_sent' INTEGER default 0,
 				'cancellation_time' TEXT
 			)
 			"""
@@ -40,7 +40,7 @@ class Database:
 			)
 			"""
 		)
-		logging.info('Database connected.')
+		logging.info("Database connected.")
 
 	def __del__(self):
 		self.connection.close()
@@ -51,45 +51,45 @@ class Database:
 				with self.connection as connection:
 					return connection.execute(query, params)
 			except sqlite3.DatabaseError as err:
-				logging.error('Database error! - %s', err)
+				logging.error("Database error! - %s", err)
 				raise
 
-	def subscribe(self, user_id, username):
+	def subscribe(self, chat_id, name):
 		self.transact(
 			"""
-			INSERT INTO users (id, username) VALUES (?, ?)
+			INSERT INTO chats (id, name) VALUES (?, ?)
 			ON CONFLICT (id) DO UPDATE SET
-				username = excluded.username,
+				name = excluded.name,
 				subscribed = 1,
 				cancellation_time = null
 			""",
-			(user_id, username)
+			(chat_id, name)
 		)
-		logging.info('New subscriber! - %s (id %s).', username, user_id)
+		logging.info("Chat '%s' (id %s) subscribed.", name, chat_id)
 
 	def cancel_subscription(self, user_id):
 		self.transact(
 			"""
-			UPDATE users SET
+			UPDATE chats SET
 				subscribed = 0,
 				cancellation_time = CURRENT_TIMESTAMP
 			WHERE id = ?
 			""",
 			(user_id,)
 		)
-		logging.info('User %s cancelled subscription.', user_id)
+		logging.info("Chat %s cancelled subscription.", user_id)
 
 	def check_subscription(self, user_id):
 		user = self.transact(
-			"SELECT subscribed FROM users WHERE id = ?",
+			"SELECT subscribed FROM chats WHERE id = ?",
 			(user_id,)
 		).fetchone()
 		if not user or not user[0]:
 			return False
 		return True
 
-	def get_users(self):
-		return self.transact("SELECT id FROM users WHERE subscribed = 1").fetchall()
+	def get_chats(self):
+		return self.transact("SELECT id FROM chats WHERE subscribed = 1").fetchall()
 
 	def get_posts(self):
 		return self.transact(
@@ -118,7 +118,7 @@ class Database:
 				(i + 1) * self.SQLITE_LIMIT_VARIABLE_NUMBER
 			]
 			self.transact(
-				"UPDATE users SET posts_seen = posts_seen + 1 WHERE id IN ({})"
+				"UPDATE chats SET posts_sent = posts_sent + 1 WHERE id IN ({})"
 				.format(', '.join(chunk))
 			)
 		self.transact(
@@ -132,15 +132,15 @@ class Database:
 	def _test(self):
 		for i in range(10):
 			self.subscribe(i, str(i))
-		subscribed = self.get_users()
+		subscribed = self.get_chats()
 		assert len(subscribed) == 10, len(subscribed)
 		for i in range(5):
 			self.cancel_subscription(i)
 		assert self.check_subscription(1) is False
 		assert self.check_subscription(6) is True
-		subscribed = self.get_users()
+		subscribed = self.get_chats()
 		assert len(subscribed) == 5, len(subscribed)
-		self.save_posts((("1212-12-12 12:12:12", "post", 'image_path'),))
+		self.save_posts((("1212-12-12 12:12:12", "post", "image_path"),))
 		self.SQLITE_LIMIT_VARIABLE_NUMBER = 2
 		self.posted("1212-12-12 12:12:12", ('5', '6', '7', '8', '9'))
 		stats = self.posts_stats()

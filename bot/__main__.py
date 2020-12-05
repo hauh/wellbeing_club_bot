@@ -6,6 +6,7 @@ import sys
 from sqlite3 import DatabaseError
 
 from telegram import ParseMode
+from telegram.constants import MESSAGEENTITY_MENTION
 from telegram.error import TelegramError
 from telegram.ext import (
 	CallbackQueryHandler, CommandHandler, Defaults, Filters, MessageHandler,
@@ -57,13 +58,20 @@ def main():
 	dispatcher.bot_data['admin'] = admin
 	dispatcher.bot_data['db'] = database
 
-	dispatcher.add_handler(CommandHandler('start', menu.start))
+	dispatcher.add_handler(CommandHandler(
+		'start', menu.start,
+		Filters.chat_type.private)
+	)
+	dispatcher.add_handler(CommandHandler(
+		'start', menu.add_group,
+		Filters.chat_type.groups & Filters.entity(MESSAGEENTITY_MENTION))
+	)
 	dispatcher.add_handler(CallbackQueryHandler(menu.back, pattern=r'^back$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.subscribe, pattern=r'^sub$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.cancel, pattern=r'^cancel$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.info, pattern=r'^info$'))
 	dispatcher.add_handler(admin_menu)
-	dispatcher.add_handler(MessageHandler(Filters.all, menu.clean))
+	dispatcher.add_handler(MessageHandler(Filters.chat_type.private, menu.clean))
 
 	dispatcher.add_error_handler(menu.error)
 

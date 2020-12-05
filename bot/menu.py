@@ -16,6 +16,13 @@ def start(update, context):
 	reply(update, **(replies.offer_sub if not subscribed else replies.cancel_sub))
 
 
+def add_group(update, context):
+	chat = update.effective_chat
+	if not context.bot_data['db'].check_subscription(chat.id):
+		context.bot_data['db'].subscribe(chat.id, chat.title)
+		update.effective_message.reply_text(replies.group_subscribed)
+
+
 def subscribe(update, context):
 	user = update.effective_user
 	context.bot_data['db'].subscribe(user.id, user.username)

@@ -35,7 +35,7 @@ class Database:
 				'id' INTEGER primary key,
 				'posted' INTEGER default 0,
 				'timestamp' TIMESTAMP unique,
-				'body' BLOB,
+				'text' BLOB,
 				'image' TEXT
 			)
 			"""
@@ -94,7 +94,7 @@ class Database:
 	def get_posts(self):
 		return self.transact(
 			"""
-			SELECT timestamp, body, image FROM posts
+			SELECT timestamp, text, image FROM posts
 			WHERE timestamp > date('now')
 			"""
 		).fetchall()
@@ -103,9 +103,9 @@ class Database:
 		for timestamp, post, image in posts:
 			self.transact(
 				"""
-				INSERT INTO posts (timestamp, body, image) VALUES (?, ?, ?)
+				INSERT INTO posts (timestamp, text, image) VALUES (?, ?, ?)
 				ON CONFLICT (timestamp) DO UPDATE SET
-					body = excluded.body,
+					text = excluded.text,
 					image = excluded.image
 				""",
 				(timestamp, post, image)
@@ -142,7 +142,6 @@ class Database:
 		assert len(subscribed) == 5, len(subscribed)
 		self.save_posts((("1212-12-12 12:12:12", "post", 'image_path'),))
 		self.SQLITE_LIMIT_VARIABLE_NUMBER = 2
-		print(self.transact('select * from posts').fetchall())
 		self.posted("1212-12-12 12:12:12", ('5', '6', '7', '8', '9'))
 		stats = self.posts_stats()
 		assert len(stats) == 1, len(stats)

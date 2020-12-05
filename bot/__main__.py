@@ -13,6 +13,7 @@ from telegram.ext import (
 )
 
 from bot import menu
+from bot.admin import admin_menu
 from bot.database import Database
 
 
@@ -56,10 +57,11 @@ def main():
 	dispatcher.bot_data['db'] = database
 
 	dispatcher.add_handler(CommandHandler('start', menu.start))
-	dispatcher.add_handler(CallbackQueryHandler(menu.start, pattern=r'^back$'))
+	dispatcher.add_handler(CallbackQueryHandler(menu.back, pattern=r'^back$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.subscribe, pattern=r'^sub$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.cancel, pattern=r'^cancel$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.info, pattern=r'^info$'))
+	dispatcher.add_handler(admin_menu)
 	dispatcher.add_handler(MessageHandler(Filters.all, menu.clean))
 
 	dispatcher.add_error_handler(menu.error)

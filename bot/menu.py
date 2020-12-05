@@ -2,18 +2,10 @@
 
 import logging
 
-from telegram.error import BadRequest, TelegramError
-from bot import responses
+from telegram.error import TelegramError
 
-
-def reply(update, response):
-	update.effective_chat.send_message(**response)
-	if update.callback_query:
-		try:
-			update.callback_query.answer()
-			update.callback_query.delete_message()
-		except BadRequest as err:
-			logging.warning("Cleaning chat error - %s", err)
+from bot import replies
+from bot.replies import reply
 
 
 def start(update, context):
@@ -21,28 +13,33 @@ def start(update, context):
 		'subscription_status',
 		context.bot_data['db'].check_subscription(update.effective_user.id)
 	)
-	reply(update, responses.offer_sub if not subscribed else responses.cancel_sub)
+	reply(update, **(replies.offer_sub if not subscribed else replies.cancel_sub))
 
 
 def subscribe(update, context):
 	user = update.effective_user
 	context.bot_data['db'].subscribe(user.id, user.username)
-	update.callback_query.answer(responses.answers['subscribed'])
-	reply(update, responses.cancel_sub)
+	context.user_data['subscription_status'] = True
+	reply(update, **replies.cancel_sub, answer='subscribed')
 
 
 def cancel(update, context):
 	context.bot_data['db'].cancel_subscription(update.effective_user.id)
-	update.callback_query.answer(responses.answers['cancelled'])
-	reply(update, responses.offer_sub)
+	context.user_data['subscription_status'] = False
+	reply(update, **replies.offer_sub, answer='cancelled')
 
 
 def info(update, _context):
-	reply(update, responses.info)
+	reply(update, **replies.info)
 
 
 def clean(update, _context):
 	update.effective_message.delete()
+
+
+def back(update, context):
+	start(update, context)
+	return -1
 
 
 def error(update, context):

@@ -36,7 +36,7 @@ class Database:
 				'posted' INTEGER default 0,
 				'timestamp' TIMESTAMP unique,
 				'text' BLOB,
-				'image' TEXT
+				'tg_image_id' TEXT
 			)
 			"""
 		)
@@ -51,7 +51,7 @@ class Database:
 				with self.connection as connection:
 					return connection.execute(query, params)
 			except sqlite3.DatabaseError as err:
-				logging.error("Database error! - %s", err)
+				logging.error("Database error - %s", err)
 				raise
 
 	def subscribe(self, chat_id, name):
@@ -94,21 +94,21 @@ class Database:
 	def get_posts(self):
 		return self.transact(
 			"""
-			SELECT timestamp, text, image FROM posts
+			SELECT timestamp, text, tg_image_id FROM posts
 			WHERE timestamp > date('now')
 			"""
 		).fetchall()
 
 	def save_posts(self, posts):
-		for timestamp, post, image in posts:
+		for timestamp, post, tg_image_id in posts:
 			self.transact(
 				"""
-				INSERT INTO posts (timestamp, text, image) VALUES (?, ?, ?)
+				INSERT INTO posts (timestamp, text, tg_image_id) VALUES (?, ?, ?)
 				ON CONFLICT (timestamp) DO UPDATE SET
 					text = excluded.text,
-					image = excluded.image
+					tg_image_id = excluded.tg_image_id
 				""",
-				(timestamp, post, image)
+				(timestamp, post, tg_image_id)
 			)
 
 	def posted(self, post_id, chats):
@@ -140,7 +140,7 @@ class Database:
 		assert self.check_subscription(6) is True
 		subscribed = self.get_chats()
 		assert len(subscribed) == 5, len(subscribed)
-		self.save_posts((("1212-12-12 12:12:12", "post", "image_path"),))
+		self.save_posts((("1212-12-12 12:12:12", "post", "some_image_id"),))
 		self.SQLITE_LIMIT_VARIABLE_NUMBER = 2
 		self.posted("1212-12-12 12:12:12", ('5', '6', '7', '8', '9'))
 		stats = self.posts_stats()

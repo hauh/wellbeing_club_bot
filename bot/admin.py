@@ -46,11 +46,14 @@ def get_posts(update, context):
 
 	try:
 		for post in posts:
-			text = f"{str(post[0])}:\n{post[1]}\n{post[2]}"
-			update.effective_chat.send_message(text)
+			text = f"{post[1]}\n\n_{post[0]}_"
+			if post[2]:
+				message = update.effective_chat.send_photo(post[2], text)
+				post[2] = message['photo'][-1]['file_id']
+			else:
+				update.effective_chat.send_message(text)
 	except TelegramError as err:
 		response = replies.update_result['fail']
-		reply(update, response['text'].format(str(err)), response['buttons'])
 		return 2
 
 	context.user_data['new_posts'] = posts

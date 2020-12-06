@@ -1,16 +1,22 @@
 """Scheduled messages."""
 
 import logging
+from functools import partial
 
 from telegram.error import TelegramError
 
 
 def send_message(context):
 	text, image = context.job.context
+	if image:
+		send = partial(context.bot.send_photo, photo=image, caption=text)
+	else:
+		send = partial(context.bot.send_message, text=text)
+
 	chats_sent = []
 	for chat_id, *_ in context.bot_data['db'].get_chats():
 		try:
-			context.bot.send_message(chat_id, text + image)
+			send(chat_id)
 		except TelegramError as err:
 			if str(err) == "Chat not found":
 				context.bot_data['db'].cancel_subscription(chat_id)

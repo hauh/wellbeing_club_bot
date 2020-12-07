@@ -1,9 +1,17 @@
 """Get posts from Excel file."""
 
-from datetime import date, datetime, time
+import logging
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+
+try:
+	FILE_TIME = ZoneInfo('Europe/Moscow')
+except ZoneInfoNotFoundError:
+	logging.warning("Time zone info not found, using UTC+3.")
+	FILE_TIME = timezone(timedelta(hours=3), 'Europe/Moscow')
 
 
 class ParseError(Exception):
@@ -21,36 +29,38 @@ def parse_document(file):
 	images = {}
 	# pylint: disable=protected-access
 	for image in document.active._images:
-		row = image.anchor._from.row
+		row = image.anchor._from.row + 1
 		if row in images:
 			raise ParseError(f"Несколько изображений в строке {row}.")
 		image.ref.seek(0)
 		images[row] = image.ref
 
+	now = datetime.now(FILE_TIME)
 	posts = []
-	row_number = 1
 	for row in document.active.iter_rows(min_row=2, min_col=2, max_col=6):
-		row_number += 1
-		try:
-			date_cell, time_cell, title_cell, body_cell, points_cell = tuple(row)
-		except ValueError as e:
-			raise ParseError(f"Ошибка чтения данных (строка {row_number}).") from e
+		date_cell, time_cell, title_cell, body_cell, points_cell = tuple(row)
+		if not date_cell.value:
+			continue
 
-		if not isinstance(date_cell.value, date):
-			raise ParseError(f"В ячейке {date_cell.coordinate} должна быть дата.")
-		if not isinstance(time_cell.value, time):
-			raise ParseError(f"В ячейке {time_cell.coordinate} должно быть время.")
-		timestamp = datetime.combine(date_cell.value, time_cell.value)
+		try:
+			post_time = datetime.combine(date_cell.value, time_cell.value, FILE_TIME)
+		except TypeError as e:
+			raise ParseError(
+				f"Неправильный формат даты или времени в строке {date_cell.row}."
+			) from e
+		if post_time < now:
+			continue
 
 		if not title_cell.value:
 			raise ParseError(f"В ячейке {title_cell.coordinate} должен быть заголовок.")
 		post_text = f"*{title_cell.value}*"
 		if body_cell.value:
-			post_text += f"\n\n{body_cell.value}"
+			post_text += "\n\n" + str(body_cell.value)
 		if points_cell.value:
 			post_text += "\n\n" + "\n".join(
-				"✔️" + line for line in str(points_cell.value).splitlines() if line)
+				"✔️ " + line for line in str(points_cell.value).splitlines() if line)
 
-		posts.append([timestamp, post_text, images.get(row_number)])
+		posts.append([post_time, post_text, images.get(date_cell.row)])
 
+	document.close()
 	return posts

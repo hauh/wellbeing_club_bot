@@ -1,5 +1,7 @@
 """Admin menu."""
 
+from datetime import timezone
+
 from telegram.error import TelegramError
 from telegram.ext import (
 	CallbackQueryHandler, CommandHandler, ConversationHandler, Filters,
@@ -44,18 +46,21 @@ def new_posts(update, context):
 		return 2
 
 	for post in posts:
-		text = f"{post[1]}\n\n_{post[0]}_"
+		post_time, post_text, image = post
+		text = f"{post_text}\n\n_{post_time.strftime('%d.%m.%Y %H:%M')}_"
 		try:
-			if post[2]:
-				message = update.effective_chat.send_photo(post[2], text, queued=False)
+			if image:
+				message = update.effective_chat.send_photo(image, text, queued=False)
 				post[2] = message['photo'][-1]['file_id']
 			else:
 				update.effective_chat.send_message(text, queued=False)
 		except TelegramError as err:
 			reply = replies.update['check_failed']
-			reply_text = reply['text'].format(str(post[0]), str(err))
+			reply_text = reply['text'].format(str(post_time), str(err))
 			context.bot.reply(update, reply_text, reply['buttons'])
 			return 2
+		else:
+			post[0] = post_time.astimezone(timezone.utc).replace(tzinfo=None)
 
 	context.user_data['new_posts'] = posts
 	reply = replies.update['success']

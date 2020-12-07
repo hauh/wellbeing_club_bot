@@ -10,59 +10,60 @@ from bot import replies
 from bot.excel import ParseError, parse_document
 from bot.jobs import schedule_posts
 from bot.menu import back
-from bot.replies import reply
 
 
 def admin(update, context):
 	if update.effective_user.id != context.bot_data['admin']:
 		update.effective_message.delete()
 		return -1
-	reply(update, **replies.admin)
+	context.bot.reply(update, **replies.admin)
 	return 1
 
 
-def stats(update, _context):
-	reply(update, **replies.stats)
+def stats(update, context):
+	context.bot.reply(update, **replies.stats)
 	return -1
 
 
-def update_posts(update, _context):
-	reply(update, **replies.upload)
+def upload_file(update, context):
+	context.bot.reply(update, **replies.upload)
 	return 2
 
 
-def get_posts(update, context):
+def new_posts(update, context):
 	file = update.effective_message.document.get_file()
 	try:
 		posts = parse_document(file.download())
 	except ParseError as err:
-		response = replies.update_result['fail']
-		reply(update, response['text'].format(str(err)), response['buttons'])
+		reply = replies.update['parse_failed']
+		context.bot.reply(update, reply['text'].format(str(err)), reply['buttons'])
 		return 2
 
 	if not posts:
-		reply(update, **replies.update_result['empty'])
+		context.bot.reply(update, **replies.update['empty'])
 		return 2
 
-	try:
-		for post in posts:
-			text = f"{post[1]}\n\n_{post[0]}_"
+	for post in posts:
+		text = f"{post[1]}\n\n_{post[0]}_"
+		try:
 			if post[2]:
-				message = update.effective_chat.send_photo(post[2], text)
+				message = update.effective_chat.send_photo(post[2], text, queued=False)
 				post[2] = message['photo'][-1]['file_id']
 			else:
-				update.effective_chat.send_message(text)
-	except TelegramError as err:
-		response = replies.update_result['fail']
-		return 2
+				update.effective_chat.send_message(text, queued=False)
+		except TelegramError as err:
+			reply = replies.update['check_failed']
+			reply_text = reply['text'].format(str(post[0]), str(err))
+			context.bot.reply(update, reply_text, reply['buttons'])
+			return 2
 
 	context.user_data['new_posts'] = posts
-	response = replies.update_result['success']
-	reply(update, response['text'].format(len(posts)), response['buttons'])
+	reply = replies.update['success']
+	context.bot.reply(update, reply['text'].format(len(posts)), reply['buttons'])
 	return 3
 
 
-def new_schedule(update, context):
+def update_schedule(update, context):
 	posts = context.user_data.pop('new_posts')
 	context.bot_data['db'].save_posts(posts)
 	schedule_posts(context.job_queue, posts)
@@ -75,13 +76,13 @@ admin_menu = ConversationHandler(
 	states={
 		1: [
 			CallbackQueryHandler(stats, pattern=r'^stats$'),
-			CallbackQueryHandler(update_posts, pattern=r'^upload$')
+			CallbackQueryHandler(upload_file, pattern=r'^upload$')
 		],
 		2: [MessageHandler(
 			Filters.chat_type.private & Filters.document.file_extension("xlsx"),
-			get_posts
+			new_posts
 		)],
-		3: [CallbackQueryHandler(new_schedule, pattern=r'^update$')]
+		3: [CallbackQueryHandler(update_schedule, pattern=r'^update$')]
 	},
 	fallbacks=[CallbackQueryHandler(back, pattern=r'^back$')],
 	allow_reentry=True

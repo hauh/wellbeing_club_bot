@@ -1,6 +1,8 @@
 """Customized Bot."""
 
-from telegram import Bot, ParseMode
+import logging
+
+from telegram import Bot, ParseMode, TelegramError
 from telegram.ext.messagequeue import MessageQueue, queuedmessage
 from telegram.utils.request import Request
 
@@ -35,3 +37,12 @@ class WellbeingClubBot(Bot):
 	@queuedmessage
 	def send_photo(self, *args, parse_mode=PARSE_MODE, **kwargs):
 		return super().send_photo(*args, parse_mode=parse_mode, **kwargs)
+
+	def reply(self, update, text, buttons, answer=None):
+		update.effective_chat.send_message(text, reply_markup=buttons, queued=False)
+		if update.callback_query:
+			try:
+				update.callback_query.answer(text=answer)
+				update.callback_query.delete_message()
+			except TelegramError as err:
+				logging.warning("Cleaning chat error - %s", err)

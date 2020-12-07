@@ -1,9 +1,6 @@
 """Bot replies."""
 
-import logging
-
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest
 
 back_btn = [InlineKeyboardButton("Назад", callback_data='back')]
 
@@ -20,11 +17,11 @@ cancel_sub = {
 	'text': "Вы подписаны. Отключить получение новостей?",
 	'buttons': InlineKeyboardMarkup([cancel_btn, info_btn])
 }
-info = {
+info_reply = {
 	'text': "Какая-то информация здесь",
 	'buttons': InlineKeyboardMarkup([back_btn])
 }
-group_subscribed = "Группа подписана."
+group_added = "Группа подписана."
 
 # admin #
 upload_btn = [InlineKeyboardButton("Загрузить файл", callback_data='upload')]
@@ -32,7 +29,7 @@ stats_btn = [InlineKeyboardButton("Статистика", callback_data='stats')
 update_btn = [InlineKeyboardButton("Обновить", callback_data='update')]
 
 admin = {
-	'text': "Меню управления.\nОбновите посты или скачайте статистку.",
+	'text': "Меню управления.\nОбновите расписание или скачайте статистку.",
 	'buttons': InlineKeyboardMarkup([upload_btn, stats_btn, back_btn])
 }
 stats = {
@@ -41,22 +38,28 @@ stats = {
 }
 upload = {
 	'text': (
-		"Загрузите файл .xlsx с постами. "
-		"Новые по времени сообщения будут отправлены в этот чат для проверки."
+		"Загрузите файл .xlsx c расписанием публикаций.\n"
+		"Формат документа: B - дата публикации, C - время, D - заголовок, "
+		"E - текст, F - рекомендации, G - изображение.\n"
+		"Публикации будут отправлены в этот чат для проверки."
 	),
 	'buttons': InlineKeyboardMarkup([back_btn])
 }
-update_result = {
-	'fail': {
-		'text': "Ошибка в файле:\n{}\nИсправьте и попробуйте ещё раз.",
+update = {
+	'parse_failed': {
+		'text': "Ошибка загрузки публикаций из файла:\n{}",
 		'buttons': InlineKeyboardMarkup([back_btn])
 	},
 	'empty': {
-		'text': "Новые сообщения не обнаружены. Попробуйте другой файл.",
+		'text': "Новые публикации не найдены в файле.",
+		'buttons': InlineKeyboardMarkup([back_btn])
+	},
+	'check_failed': {
+		'text': "*Публикация {} не отправляется*. Ответ телеграма:\n```{}```",
 		'buttons': InlineKeyboardMarkup([back_btn])
 	},
 	'success': {
-		'text': "Новых сообщений: {}",
+		'text': "Подвердите новое расписание. Всего публикаций: {}.",
 		'buttons': InlineKeyboardMarkup([update_btn, back_btn])
 	}
 }
@@ -67,13 +70,3 @@ answers = {
 	'cancelled': "Вы отписаны :(",
 	'updated': "Расписание обновлено."
 }
-
-
-def reply(update, text, buttons, answer=None):
-	update.effective_chat.send_message(text, reply_markup=buttons)
-	if update.callback_query:
-		try:
-			update.callback_query.answer(text=answers.get(answer))
-			update.callback_query.delete_message()
-		except BadRequest as err:
-			logging.warning("Cleaning chat error - %s", err)

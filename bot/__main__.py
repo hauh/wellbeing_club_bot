@@ -5,16 +5,15 @@ import os
 import sys
 from sqlite3 import DatabaseError
 
-from telegram import ParseMode
 from telegram.constants import MESSAGEENTITY_MENTION
 from telegram.error import TelegramError
 from telegram.ext import (
-	CallbackQueryHandler, CommandHandler, Defaults, Filters, MessageHandler,
-	Updater
+	CallbackQueryHandler, CommandHandler, Filters, MessageHandler, Updater
 )
 
 from bot import menu
 from bot.admin import admin_menu
+from bot.botclass import WellbeingClubBot
 from bot.database import Database
 from bot.jobs import schedule_posts
 
@@ -47,9 +46,7 @@ def main():
 		sys.exit(1)
 
 	try:
-		updater = Updater(token, defaults=Defaults(
-			parse_mode=ParseMode.MARKDOWN
-		))
+		updater = Updater(bot=WellbeingClubBot(token))
 	except TelegramError as err:
 		logging.critical("Telegram connection error - %s", err)
 		sys.exit(1)
@@ -60,12 +57,12 @@ def main():
 
 	dispatcher.add_handler(CommandHandler(
 		'start', menu.start,
-		Filters.chat_type.private)
-	)
+		Filters.chat_type.private
+	))
 	dispatcher.add_handler(CommandHandler(
 		'start', menu.add_group,
-		Filters.chat_type.groups & Filters.entity(MESSAGEENTITY_MENTION))
-	)
+		Filters.chat_type.groups & Filters.entity(MESSAGEENTITY_MENTION)
+	))
 	dispatcher.add_handler(CallbackQueryHandler(menu.back, pattern=r'^back$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.subscribe, pattern=r'^sub$'))
 	dispatcher.add_handler(CallbackQueryHandler(menu.cancel, pattern=r'^cancel$'))

@@ -14,7 +14,7 @@ from bot.jobs import schedule_posts
 
 
 def admin(update, context):
-	if update.effective_user.id != context.bot_data['admin']:
+	if update.effective_user.id not in context.bot_data['admins']:
 		update.effective_message.delete()
 		return -1
 	context.bot.reply(update, **replies.admin)

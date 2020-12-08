@@ -27,9 +27,9 @@ def main():
 		sys.exit(1)
 
 	try:
-		admin = int(os.environ['ADMIN'])
+		admins = set(int(admin_id) for admin_id in os.environ['ADMINS'].split(','))
 	except KeyError:
-		logging.critical("ADMIN environment variable required.")
+		logging.critical("ADMINS environment variable required.")
 		sys.exit(1)
 	except ValueError:
 		logging.critical("Admin ID must be a number.")
@@ -48,7 +48,7 @@ def main():
 		sys.exit(1)
 
 	dispatcher = updater.dispatcher
-	dispatcher.bot_data['admin'] = admin
+	dispatcher.bot_data['admins'] = admins
 	dispatcher.bot_data['db'] = database
 	register_conversation(dispatcher)
 

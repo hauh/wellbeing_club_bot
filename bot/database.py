@@ -25,7 +25,7 @@ class Database:
 				'subscribed' INTEGER default 1,
 				'subscription_time' TIMESTAMP default CURRENT_TIMESTAMP,
 				'posts_sent' INTEGER default 0,
-				'cancellation_time' TEXT
+				'cancellation_time' TIMESTAMP
 			)
 			"""
 		)
@@ -92,7 +92,8 @@ class Database:
 		self.transact("UPDATE chats SET id = ? WHERE id = ?", (new_id, old_id))
 
 	def get_chats(self):
-		return self.transact("SELECT id FROM chats WHERE subscribed = 1").fetchall()
+		chats = self.transact("SELECT id FROM chats WHERE subscribed = 1").fetchall()
+		return [chat[0] for chat in chats]
 
 	def get_posts(self):
 		return self.transact(
@@ -136,18 +137,18 @@ class Database:
 		for i in range(10):
 			self.subscribe(i, str(i))
 		subscribed = self.get_chats()
-		assert len(subscribed) == 10, len(subscribed)
+		assert len(subscribed) == 10, subscribed
 		for i in range(5):
 			self.cancel_subscription(i)
 		assert self.check_subscription(1) is False
 		assert self.check_subscription(6) is True
 		subscribed = self.get_chats()
-		assert len(subscribed) == 5, len(subscribed)
+		assert len(subscribed) == 5, subscribed
 		self.save_posts((("1212-12-12 12:12:12", "post", "some_image_id"),))
 		self.change_chat_id(5, 777)
-		assert self.check_subscription(777) is True
 		self.SQLITE_LIMIT_VARIABLE_NUMBER = 2
-		self.posted("1212-12-12 12:12:12", ('5', '6', '7', '8', '9'))
+		self.posted("1212-12-12 12:12:12", self.get_chats())
 		stats = self.posts_stats()
-		assert len(stats) == 1, len(stats)
-		assert stats[0][1] == 5, stats[0]
+		assert len(stats) == 1, stats
+		assert stats[0][1] and stats[0][1] % 5 == 0, stats[0]
+		self.change_chat_id(777, 5)

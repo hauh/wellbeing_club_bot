@@ -21,7 +21,7 @@ from bot.jobs import schedule_posts
 def main():
 	logging.basicConfig(
 		level=logging.INFO,
-		format="%(asctime)s - %(levelname)s - %(module)s - %(message)s",
+		format="%(asctime)s - %(levelname)s - %(funcName)s - %(message)s",
 	)
 
 	try:
@@ -73,7 +73,7 @@ def main():
 	dispatcher.add_error_handler(menu.error)
 
 	updater.start_polling()
-	schedule_posts(dispatcher.job_queue, database.get_posts())
+	schedule_posts(updater.bot, dispatcher.job_queue, database.get_posts())
 	logging.info("Bot started!")
 
 	updater.idle()

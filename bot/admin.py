@@ -71,7 +71,7 @@ def new_posts(update, context):
 def update_schedule(update, context):
 	posts = context.user_data.pop('new_posts')
 	context.bot_data['db'].save_posts(posts)
-	schedule_posts(context.job_queue, posts)
+	schedule_posts(context.bot, context.job_queue, posts)
 	update.callback_query.answer(replies.answers['updated'])
 	return back(update, context)
 

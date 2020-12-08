@@ -7,16 +7,14 @@ from functools import partial
 from telegram.error import BadRequest, ChatMigrated, RetryAfter, Unauthorized
 
 
-def send_message(context):
-	text, tg_image_id, chats = context.job.context
-	if tg_image_id:
-		send = partial(context.bot.send_photo, photo=tg_image_id, caption=text)
-	else:
-		send = partial(context.bot.send_message, text=text)
+def messaging(context):
+	job_name = context.job.name
+	messager, chats, retries = context.job.context
+	chats = chats or context.bot_data['db'].get_chats()
+	logging.info("[%s] Messaging to %s chats started.", job_name, len(chats))
 
-	sent_chats, retry_chats = [], []
-	chats = chats or (chat[0] for chat in context.bot_data['db'].get_chats())
-	for promise in [send(chat_id, isgroup=chat_id < 0) for chat_id in chats]:
+	sent, retry = [], []
+	for promise in [messager(chat_id, isgroup=chat_id < 0) for chat_id in chats]:
 		chat_id = promise.args[1]
 		try:
 			result = promise.result(timeout=3600)
@@ -24,34 +22,37 @@ def send_message(context):
 			context.bot_data['db'].cancel_subscription(chat_id)
 		except ChatMigrated as err:
 			context.bot_data['db'].change_chat_id(chat_id, err.new_chat_id)
-			retry_chats.append(err.new_chat_id)
-		except RetryAfter as err:
-			retry_chats.append(chat_id)
+			retry.append(err.new_chat_id)
+		except RetryAfter:
+			retry.append(chat_id)
 		except Exception as err:  # pylint: disable=broad-except
 			if isinstance(err, BadRequest) and str(err) == "Chat not found":
 				context.bot_data['db'].cancel_subscription(chat_id)
 			else:
-				logging.error("Chat %s message error - %s", chat_id, err)
+				logging.warning("[%s] Skipping chat '%s' - %s", job_name, chat_id, err)
 		else:
-			(sent_chats if result else retry_chats).append(chat_id)
+			(sent if result else retry).append(chat_id)
 
-	if not sent_chats:
-		logging.error("No messages were sent.")
-	else:
-		if retry_chats:
-			context.job_queue.run_once(
-				send_message,
-				datetime.now() + timedelta(hours=1),
-				(text, tg_image_id, retry_chats),
-				context.job.name + "_[retry]",
-			)
-			logging.info("Some chats left. Retry in one hour.")
-		logging.info("Message sent to %s chats.", len(sent_chats))
-		context.bot_data['db'].posted(context.job.name, sent_chats)
+	if retry:
+		if retries < 3:
+			logging.info("[%s] %s chats left. Retry in one hour.", job_name, len(retry))
+			retry_time = datetime.now() + timedelta(hours=1)
+			retry_context = (messager, retry, retries + 1)
+			context.job_queue.run_once(messaging, retry_time, retry_context, job_name)
+		else:
+			logging.warning("[%s] After 3 retries %s chats left.", job_name, len(retry))
+
+	if sent:
+		logging.info("[%s] Messages sent: %s / %s.", job_name, len(sent), len(chats))
+		context.bot_data['db'].posted(context.job.name, sent)
 
 
-def schedule_posts(job_queue, posts):
+def schedule_posts(bot, job_queue, posts):
 	job_queue.scheduler.remove_all_jobs()
-	for timestamp, text, tg_image_id in posts:
-		context = (text, tg_image_id, None)
-		job_queue.run_once(send_message, timestamp, context, str(timestamp))
+	for post_time, text, tg_image_id in posts:
+		if tg_image_id:
+			messager = partial(bot.send_photo, photo=tg_image_id, caption=text)
+		else:
+			messager = partial(bot.send_message, text=text)
+		job_queue.run_once(messaging, post_time, (messager, None, 0), str(post_time))
+	logging.info("Scheduled %s posts.", len(posts))

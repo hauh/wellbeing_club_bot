@@ -11,7 +11,6 @@ from telegram.ext import (
 from bot import replies
 from bot.excel import ParseError, parse_document
 from bot.jobs import schedule_posts
-from bot.menu import back
 
 
 def admin(update, context):
@@ -24,7 +23,7 @@ def admin(update, context):
 
 def stats(update, context):
 	context.bot.reply(update, **replies.stats)
-	return -1
+	return 1
 
 
 def upload_file(update, context):
@@ -39,11 +38,11 @@ def new_posts(update, context):
 	except ParseError as err:
 		reply = replies.update['parse_failed']
 		context.bot.reply(update, reply['text'].format(str(err)), reply['buttons'])
-		return 2
+		return None
 
 	if not posts:
 		context.bot.reply(update, **replies.update['empty'])
-		return 2
+		return None
 
 	for post in posts:
 		post_time, post_text, image = post
@@ -58,7 +57,7 @@ def new_posts(update, context):
 			reply = replies.update['check_failed']
 			reply_text = reply['text'].format(str(post_time), str(err))
 			context.bot.reply(update, reply_text, reply['buttons'])
-			return 2
+			return None
 		else:
 			post[0] = post_time.astimezone(timezone.utc).replace(tzinfo=None)
 
@@ -73,7 +72,7 @@ def update_schedule(update, context):
 	context.bot_data['db'].save_posts(posts)
 	schedule_posts(context.bot, context.job_queue, posts)
 	update.callback_query.answer(replies.answers['updated'])
-	return back(update, context)
+	return admin(update, context)
 
 
 admin_menu = ConversationHandler(
@@ -89,6 +88,6 @@ admin_menu = ConversationHandler(
 		)],
 		3: [CallbackQueryHandler(update_schedule, pattern=r'^update$')]
 	},
-	fallbacks=[CallbackQueryHandler(back, pattern=r'^back$')],
+	fallbacks=[CallbackQueryHandler(admin, pattern=r'^back_admin$')],
 	allow_reentry=True
 )

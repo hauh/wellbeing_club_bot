@@ -3,11 +3,15 @@
 import logging
 
 from telegram.error import TelegramError
+from telegram.ext import (
+	CallbackQueryHandler, CommandHandler, Filters, MessageHandler
+)
 
-from bot.replies import offer_sub, cancel_sub, info_reply, group_added, answers
+from bot.admin import admin_menu
+from bot.replies import answers, cancel_sub, greetings, info_reply, offer_sub
 
 
-def start(update, context):
+def main_menu(update, context):
 	subscribed = context.user_data.setdefault(
 		'subscription_status',
 		context.bot_data['db'].check_subscription(update.effective_user.id)
@@ -15,11 +19,9 @@ def start(update, context):
 	context.bot.reply(update, **(offer_sub if not subscribed else cancel_sub))
 
 
-def add_group(update, context):
-	chat = update.effective_chat
-	if not context.bot_data['db'].check_subscription(chat.id):
-		context.bot_data['db'].subscribe(chat.id, chat.title)
-		update.effective_message.reply_text(group_added)
+def start(update, context):
+	update.effective_chat.send_message(greetings, queued=False)
+	main_menu(update, context)
 
 
 def subscribe(update, context):
@@ -29,7 +31,7 @@ def subscribe(update, context):
 	context.bot.reply(update, **cancel_sub, answer=answers['subscribed'])
 
 
-def cancel(update, context):
+def cancel_subscription(update, context):
 	context.bot_data['db'].cancel_subscription(update.effective_user.id)
 	context.user_data['subscription_status'] = False
 	context.bot.reply(update, **offer_sub, answer=answers['cancelled'])
@@ -43,9 +45,12 @@ def clean(update, _context):
 	update.effective_message.delete()
 
 
-def back(update, context):
-	start(update, context)
-	return -1
+def subscribe_group(update, context):
+	chat = update.effective_chat
+	subscribed_chats = context.bot_data.setdefault('subscribed_chats', set())
+	if chat not in subscribed_chats:
+		subscribed_chats.add(chat)
+		context.bot_data['db'].subscribe(chat.id, chat.title)
 
 
 def error(update, context):
@@ -58,4 +63,20 @@ def error(update, context):
 			pass
 		user = update.effective_user.username or update.effective_user.id
 		logging.warning("User '%s' error - %s", user, context.error)
-		start(update, context)
+		main_menu(update, context)
+
+
+def register_conversation(dispatcher):
+	for handler in (
+		CommandHandler('start', start, Filters.chat_type.private),
+		MessageHandler(~Filters.chat_type.private, subscribe_group),
+		CallbackQueryHandler(subscribe, pattern=r'^sub$'),
+		CallbackQueryHandler(cancel_subscription, pattern=r'^cancel$'),
+		CallbackQueryHandler(info, pattern=r'^info$'),
+		CallbackQueryHandler(main_menu, pattern=r'^back$'),
+		admin_menu,
+		MessageHandler(Filters.chat_type.private, clean)
+	):
+		dispatcher.add_handler(handler)
+
+	dispatcher.add_error_handler(error)

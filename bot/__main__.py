@@ -5,17 +5,13 @@ import os
 import sys
 from sqlite3 import DatabaseError
 
-from telegram.constants import MESSAGEENTITY_MENTION
 from telegram.error import TelegramError
-from telegram.ext import (
-	CallbackQueryHandler, CommandHandler, Filters, MessageHandler, Updater
-)
+from telegram.ext import Updater
 
-from bot import menu
-from bot.admin import admin_menu
 from bot.botclass import WellbeingClubBot
 from bot.database import Database
 from bot.jobs import schedule_posts
+from bot.menu import register_conversation
 
 
 def main():
@@ -54,23 +50,7 @@ def main():
 	dispatcher = updater.dispatcher
 	dispatcher.bot_data['admin'] = admin
 	dispatcher.bot_data['db'] = database
-
-	dispatcher.add_handler(CommandHandler(
-		'start', menu.start,
-		Filters.chat_type.private
-	))
-	dispatcher.add_handler(CommandHandler(
-		'start', menu.add_group,
-		Filters.chat_type.groups & Filters.entity(MESSAGEENTITY_MENTION)
-	))
-	dispatcher.add_handler(CallbackQueryHandler(menu.back, pattern=r'^back$'))
-	dispatcher.add_handler(CallbackQueryHandler(menu.subscribe, pattern=r'^sub$'))
-	dispatcher.add_handler(CallbackQueryHandler(menu.cancel, pattern=r'^cancel$'))
-	dispatcher.add_handler(CallbackQueryHandler(menu.info, pattern=r'^info$'))
-	dispatcher.add_handler(admin_menu)
-	dispatcher.add_handler(MessageHandler(Filters.chat_type.private, menu.clean))
-
-	dispatcher.add_error_handler(menu.error)
+	register_conversation(dispatcher)
 
 	updater.start_polling()
 	schedule_posts(updater.bot, dispatcher.job_queue, database.get_posts())

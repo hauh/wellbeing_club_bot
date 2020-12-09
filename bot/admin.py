@@ -13,17 +13,19 @@ from telegram.ext.filters import MessageFilter
 from telegram.inline.inlinekeyboardbutton import InlineKeyboardButton
 from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
 
-from bot import ADMINS, POSTS_FILE
+from bot import ADMINS, FILE_TIME, POSTS_FILE
 from bot.excel import ParseError, parse_document
 from bot.jobs import schedule_posts
 
 admin_reply = (
-	"Меню управления.\n"
+	"Меню управления.\n\n"
 	"*Загрузите файл .xlsx* c расписанием публикаций.\n"
 	"Формат документа: B - дата публикации, C - время, D - заголовок, "
 	"E - текст, F - рекомендации, G - изображение.\n"
-	"Публикации будут отправлены в этот чат для проверки."
+	"Публикации будут отправлены в этот чат для проверки.\n\n"
+	"*Ближайшая публикация*: {}."
 )
+no_posts = "не запланировано"
 parse_failed = "Ошибка загрузки публикаций из файла:\n{}"
 empty_file = "Новые публикации не найдены в файле."
 check_failed = "*Публикация {} не отправляется*. Ответ телеграма:\n```{}```"
@@ -54,8 +56,13 @@ def reply(update, text, buttons=None, answer=None):
 			logging.warning("Cleaning chat error - %s", err)
 
 
-def admin_main(update, _context):
-	reply(update, admin_reply)
+def admin_main(update, context):
+	if jobs := context.job_queue.scheduler.get_jobs():
+		next_time = jobs[0].next_run_time.astimezone(FILE_TIME)
+		next_time = next_time.strftime('%d.%m.%Y %H:%M')
+	else:
+		next_time = no_posts
+	reply(update, admin_reply.format(next_time))
 	return 1
 
 

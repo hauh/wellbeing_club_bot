@@ -1,17 +1,11 @@
 """Get posts from Excel file."""
 
-import logging
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import datetime
 
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-try:
-	FILE_TIME = ZoneInfo('Europe/Moscow')
-except ZoneInfoNotFoundError:
-	logging.warning("Time zone info not found, using UTC+3.")
-	FILE_TIME = timezone(timedelta(hours=3), 'Europe/Moscow')
+from bot import FILE_TIME
 
 
 class ParseError(Exception):
@@ -21,10 +15,8 @@ class ParseError(Exception):
 def parse_document(file):
 	try:
 		document = load_workbook(file)
-	except (OSError, IOError) as e:
+	except (OSError, IOError, KeyError, InvalidFileException) as e:
 		raise ParseError("Ошибка чтения файла.") from e
-	except InvalidFileException as e:
-		raise ParseError("Невалидный файл.") from e
 
 	images = {}
 	# pylint: disable=protected-access

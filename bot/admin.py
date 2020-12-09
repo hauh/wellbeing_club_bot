@@ -1,93 +1,114 @@
 """Admin menu."""
 
+import json
+import logging
 from datetime import timezone
 
+from telegram.constants import CHAT_PRIVATE
 from telegram.error import TelegramError
 from telegram.ext import (
-	CallbackQueryHandler, CommandHandler, ConversationHandler, Filters,
-	MessageHandler
+	CallbackQueryHandler, ConversationHandler, Filters, MessageHandler
 )
+from telegram.ext.filters import MessageFilter
+from telegram.inline.inlinekeyboardbutton import InlineKeyboardButton
+from telegram.inline.inlinekeyboardmarkup import InlineKeyboardMarkup
 
-from bot import replies
+from bot import ADMINS, POSTS_FILE
 from bot.excel import ParseError, parse_document
 from bot.jobs import schedule_posts
 
+admin_reply = (
+	"Меню управления.\n"
+	"*Загрузите файл .xlsx* c расписанием публикаций.\n"
+	"Формат документа: B - дата публикации, C - время, D - заголовок, "
+	"E - текст, F - рекомендации, G - изображение.\n"
+	"Публикации будут отправлены в этот чат для проверки."
+)
+parse_failed = "Ошибка загрузки публикаций из файла:\n{}"
+empty_file = "Новые публикации не найдены в файле."
+check_failed = "*Публикация {} не отправляется*. Ответ телеграма:\n```{}```"
+confirm = "Подвердите новое расписание. Всего публикаций: {}."
+success = "Расписание обновлено."
 
-def admin(update, context):
-	if update.effective_user.id not in context.bot_data['admins']:
-		update.effective_message.delete()
-		return -1
-	context.bot.reply(update, **replies.admin)
+confirm_keyboard = InlineKeyboardMarkup([
+	[InlineKeyboardButton("Обновить", callback_data=r'update')],
+	[InlineKeyboardButton("Отмена", callback_data=r'cancel')]
+])
+
+
+class AdminFilter(MessageFilter):
+	"""Filtering out non-private non-admin messages."""
+
+	def filter(self, message):
+		return message.chat.type == CHAT_PRIVATE and message.from_user.id in ADMINS
+
+
+def reply(update, text, buttons=None, answer=None):
+	"""Wrapper function for responses to user."""
+	update.effective_chat.send_message(text, reply_markup=buttons)
+	if update.callback_query:
+		try:
+			update.callback_query.answer(text=answer)
+			update.callback_query.delete_message()
+		except TelegramError as err:
+			logging.warning("Cleaning chat error - %s", err)
+
+
+def admin_main(update, _context):
+	reply(update, admin_reply)
 	return 1
 
 
-def stats(update, context):
-	context.bot.reply(update, **replies.stats)
-	return 1
-
-
-def upload_file(update, context):
-	context.bot.reply(update, **replies.upload)
-	return 2
-
-
-def new_posts(update, context):
+def check_file(update, context):
 	file = update.effective_message.document.get_file()
 	try:
 		posts = parse_document(file.download())
 	except ParseError as err:
-		reply = replies.update['parse_failed']
-		context.bot.reply(update, reply['text'].format(str(err)), reply['buttons'])
+		reply(update, parse_failed.format(str(err)))
 		return None
 
 	if not posts:
-		context.bot.reply(update, **replies.update['empty'])
+		reply(update, empty_file)
 		return None
 
 	for post in posts:
-		post_time, post_text, image = post
-		text = f"{post_text}\n\n_{post_time.strftime('%d.%m.%Y %H:%M')}_"
+		time, text, image = post
+		check_text = f"{text}\n\n_{time.strftime('%d.%m.%Y %H:%M')}_"
 		try:
 			if image:
-				message = update.effective_chat.send_photo(image, text, queued=False)
+				message = update.effective_chat.send_photo(image, check_text)
 				post[2] = message['photo'][-1]['file_id']
 			else:
-				update.effective_chat.send_message(text, queued=False)
+				update.effective_chat.send_message(check_text)
 		except TelegramError as err:
-			reply = replies.update['check_failed']
-			reply_text = reply['text'].format(str(post_time), str(err))
-			context.bot.reply(update, reply_text, reply['buttons'])
+			reply(update, check_failed.format(str(time), str(err)))
 			return None
 		else:
-			post[0] = post_time.astimezone(timezone.utc).replace(tzinfo=None)
+			post[0] = time.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
 
 	context.user_data['new_posts'] = posts
-	reply = replies.update['success']
-	context.bot.reply(update, reply['text'].format(len(posts)), reply['buttons'])
-	return 3
+	reply(update, confirm.format(len(posts)), confirm_keyboard)
+	return 2
 
 
 def update_schedule(update, context):
 	posts = context.user_data.pop('new_posts')
-	context.bot_data['db'].save_posts(posts)
-	schedule_posts(context.bot, context.job_queue, posts)
-	update.callback_query.answer(replies.answers['updated'])
-	return admin(update, context)
+	with open(POSTS_FILE, 'w') as f:
+		json.dump(posts, f)
+	schedule_posts(context.job_queue, posts)
+	update.callback_query.answer(success)
+	return admin_main(update, context)
 
 
 admin_menu = ConversationHandler(
-	entry_points=[CommandHandler('admin', admin, Filters.chat_type.private)],
+	entry_points=[MessageHandler(AdminFilter() & Filters.text, admin_main)],
 	states={
-		1: [
-			CallbackQueryHandler(stats, pattern=r'^stats$'),
-			CallbackQueryHandler(upload_file, pattern=r'^upload$')
-		],
-		2: [MessageHandler(
-			Filters.chat_type.private & Filters.document.file_extension("xlsx"),
-			new_posts
+		1: [MessageHandler(
+			AdminFilter() & Filters.document.file_extension("xlsx"),
+			check_file
 		)],
-		3: [CallbackQueryHandler(update_schedule, pattern=r'^update$')]
+		2: [CallbackQueryHandler(update_schedule, pattern=r'^update$')]
 	},
-	fallbacks=[CallbackQueryHandler(admin, pattern=r'^back_admin$')],
+	fallbacks=[CallbackQueryHandler(admin_main, pattern=r'^cancel$')],
 	allow_reentry=True
 )

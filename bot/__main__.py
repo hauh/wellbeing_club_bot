@@ -1,61 +1,57 @@
 """Wellbeing Club Bot."""
 
+import json
 import logging
-import os
 import sys
-from sqlite3 import DatabaseError
 
+from telegram import ParseMode
 from telegram.error import TelegramError
-from telegram.ext import Updater
+from telegram.ext import Defaults, Updater
 
-from bot.botclass import WellbeingClubBot
-from bot.database import Database
+from bot import CHANNELS_FILE, POSTS_FILE, TOKEN
+from bot.admin import admin_menu
 from bot.jobs import schedule_posts
-from bot.menu import register_conversation
+
+
+def error(update, context):
+	if not update or not update.effective_user:
+		logging.error("Bot error - %s", context.error)
+	else:
+		try:
+			update.effective_message.delete()
+		except (AttributeError, TelegramError):
+			pass
+		user = update.effective_user.username or update.effective_user.id
+		logging.warning("User '%s' error - %s", user, context.error)
 
 
 def main():
-	logging.basicConfig(
-		level=logging.INFO,
-		format="%(asctime)s - %(levelname)s - %(funcName)s - %(message)s",
-	)
-
 	try:
-		token = os.environ['TOKEN']
-	except KeyError:
-		logging.critical("TOKEN environment variable required.")
-		sys.exit(1)
-
-	try:
-		admins = set(int(admin_id) for admin_id in os.environ['ADMINS'].split(','))
-	except KeyError:
-		logging.critical("ADMINS environment variable required.")
-		sys.exit(1)
-	except ValueError:
-		logging.critical("Admin ID must be a number.")
-		sys.exit(1)
-
-	try:
-		database = Database('data/wellbeing_club.db')
-	except DatabaseError as err:
-		logging.critical("Database error - %s", err)
-		sys.exit(1)
-
-	try:
-		updater = Updater(bot=WellbeingClubBot(token))
+		updater = Updater(TOKEN, defaults=Defaults(parse_mode=ParseMode.MARKDOWN))
 	except TelegramError as err:
-		logging.critical("Telegram connection error - %s", err)
+		logging.critical("Telegram connection error: %s", err)
 		sys.exit(1)
 
 	dispatcher = updater.dispatcher
-	dispatcher.bot_data['admins'] = admins
-	dispatcher.bot_data['db'] = database
-	register_conversation(dispatcher)
+	dispatcher.add_handler(admin_menu)
+	dispatcher.add_error_handler(error)
+
+	try:
+		with open(CHANNELS_FILE) as f:
+			dispatcher.bot_data['channels'] = json.load(f)
+	except (FileNotFoundError, json.JSONDecodeError):
+		dispatcher.bot_data['channels'] = []
 
 	updater.start_polling()
-	schedule_posts(updater.bot, dispatcher.job_queue, database.get_posts())
-	logging.info("Bot started!")
 
+	try:
+		with open(POSTS_FILE) as f:
+			posts = json.load(f)
+			schedule_posts(dispatcher.job_queue, posts)
+	except (FileNotFoundError, json.JSONDecodeError):
+		pass
+
+	logging.info("Bot started!")
 	updater.idle()
 	logging.info("Turned off.")
 

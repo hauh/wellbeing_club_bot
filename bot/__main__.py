@@ -8,8 +8,9 @@ from telegram import ParseMode
 from telegram.error import TelegramError
 from telegram.ext import Defaults, Updater
 
-from bot import CHANNELS_FILE, POSTS_FILE, TOKEN
+from bot import POSTS_FILE, TOKEN
 from bot.admin import admin_menu
+from bot.channels import ChannelsCollection, ChannelsRegistrator
 from bot.jobs import schedule_posts
 
 
@@ -33,14 +34,10 @@ def main():
 		sys.exit(1)
 
 	dispatcher = updater.dispatcher
+	dispatcher.bot_data['channels'] = ChannelsCollection()
+	dispatcher.add_handler(ChannelsRegistrator())
 	dispatcher.add_handler(admin_menu)
 	dispatcher.add_error_handler(error)
-
-	try:
-		with open(CHANNELS_FILE) as f:
-			dispatcher.bot_data['channels'] = json.load(f)
-	except (FileNotFoundError, json.JSONDecodeError):
-		dispatcher.bot_data['channels'] = []
 
 	updater.start_polling()
 

@@ -41,6 +41,9 @@ class ChannelsCollection:
 	def __iter__(self):
 		return iter(self.items)
 
+	def __str__(self):
+		return str(self.items)
+
 	def add(self, new_channel_id):
 		if new_channel_id not in self.items:
 			self.items.add(new_channel_id)

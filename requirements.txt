@@ -6,7 +6,7 @@ decorator==4.4.2
 et-xmlfile==1.0.1
 jdcal==1.4.1
 openpyxl==3.0.5
-Pillow==8.0.1
+Pillow==8.2.0
 pycparser==2.20
 python-telegram-bot==13.1
 pytz==2020.4
